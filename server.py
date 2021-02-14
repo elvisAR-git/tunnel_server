@@ -7,6 +7,9 @@ import pickle
 import datetime
 from os import system
 
+import subprocess
+import traceback
+
 
 class Colors:
     FAIL = "\033[91m"
@@ -33,10 +36,10 @@ class Server:
             self.socket.listen()
             _ = system("clear")
             print(
-                f"{Colors.BOLD}{Colors.OKBLUE}::**:e:**:l:**:v:**:i:**:s:**:t:**:o:**:o:**:l:**:s:**::"
+                f"{Colors.BOLD}{Colors.OKBLUE}::**:E:**:l:**:V:**:i:**:s:**:T:**:o:**:O:**:l:**:S:**::"
             )
             print(
-                f"{Colors.BOLD}{Colors.OKGREEN}[TUNNEL V1.0.2 STARTED AT: {self.address}:{self.port}]\nUser Control+C to stop the server\n\n"
+                f"{Colors.BOLD}{Colors.OKGREEN}[TUNNEL V1.0.4 for (FES) STARTED AT: {self.address}:{self.port}]\nUser Control+C to stop the server\n\n"
             )
         except:
             print("ERROR: could not start the server at the specified port")
@@ -58,41 +61,38 @@ class Server:
                 break
 
 
-class Message:
-    def __init__(self, message, sender, reciever):
-        self.message = message
-        self.time = datetime.datetime.today()
-        self.sender = sender
-        self.reciever = reciever
-
-
 def client_thread(conn, addr, server):
-    conn.send(pickle.dumps(Message("Connection successful", "TUNNEL_SERVER", addr)))
-    user_token = pickle.loads(conn.recv(4096))
-    print(
-        f"{Colors.OKBLUE}[+]{datetime.datetime.today()}--Recieved user token from {user_token.sender}"
-    )
-    server.clients.append({"conn": conn, "addr": addr, "username": user_token.sender})
-    while True:
-        try:
-            message = pickle.loads(conn.recv(4096))
-            for client in server.clients:
-                if client.get("username") == message.reciever:
-                    try:
-                        client.get("conn").send(pickle.dumps(message))
-                        print(
-                            f"[+]{Colors.OKGREEN}{datetime.datetime.today()}--Routing message to {client.get('addr')}----:::"
-                        )
-                        break
-                    except:
-                        print(
-                            f"{Colors.FAIL}{datetime.datetime.today()}--[!]client {client.get('addr')} is unreachable----:::"
-                        )
-        except:
-            pass
+    file_to_execute = conn.recv(4096)
+    file_to_execute = file_to_execute.decode()
+    print("[*]Attempting to run:", file_to_execute)
+    try:
+        if ".py" in file_to_execute:
+            a = subprocess.run(
+                ["python3.8", f"{file_to_execute}"], capture_output=True)
+        elif ".cpp" in file_to_execute:
+            a = subprocess.run(
+                ["g++", f"{file_to_execute}"], capture_output=True)
+            if len(a.stderr.decode("utf-8")) < 1:
+                a = subprocess.run(
+                    ["./a.out"], capture_output=True)
+    except Exception as e:
+        print("[!]Sys fail", e)
+        error = f'Failed to execute {file_to_execute}'
+        conn.send(error.encode())
+        return
+    try:
+        if len(a.stdout.decode("utf-8")) == 0 and len(a.stderr.decode("utf-8")) == 0:
+            conn.send(b"Program STD_OUT is empty")
+        elif len(a.stdout.decode("utf-8")) > 0 and len(a.stderr.decode("utf-8")) < 1:
+            conn.send(a.stdout)
+        elif len(a.stderr.decode("utf-8")) > 0:
+            g = a.stderr.decode("utf-8")
+            g = g.replace(file_to_execute, "******/****")
+            conn.send(g.encode())
+    except:
+        conn.send(b"Could not execute the file")
 
 
 port = input("enter port: ")
-address = input("enter address: ")
-myserver = Server(address, int(port))
+myserver = Server("localhost", int(port))
 myserver.listen()
